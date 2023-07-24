@@ -125,7 +125,7 @@ jobs:
     needs:
       - build-binaries
       - build-and-push-docker-images
-    runs-on: fabric-ubuntu-20.04
+    runs-on: ubuntu-20.04
     permissions:
       contents: write
     steps:
