@@ -13,7 +13,7 @@ on:
 env:
   GO_VER: 1.20.4
   UBUNTU_VER: 20.04
-  FABRIC_VER: ${{ github.ref_name }}
+  FABRIC_VER: v2.5.1
 
 permissions:
   contents: read
@@ -119,3 +119,25 @@ jobs:
             UBUNTU_VER=${{ env.UBUNTU_VER }}
             GO_VER=${{ env.GO_VER }}
             GO_TAGS=
+            
+  create-release:
+    name: Create GitHub Release
+    needs:
+      - build-binaries
+      - build-and-push-docker-images
+    runs-on: fabric-ubuntu-20.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Fabric Code
+        uses: actions/checkout@v3
+      - name: Download Artifacts
+        id: download
+        uses: actions/download-artifact@v3
+      - name: Release Fabric Version
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: "true"
+          artifacts: "release-*-*/*.tar.gz"
+          tag: latest
+          name: BLOCC Fabric Binaries
