@@ -8,6 +8,7 @@ package chaincode
 
 import (
 	"context"
+
 	"github.com/golang/protobuf/proto"
 	pb "github.com/hyperledger/fabric-protos-go/peer"
 	"github.com/pkg/errors"

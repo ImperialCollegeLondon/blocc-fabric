@@ -72,21 +72,22 @@ type Node struct {
 // send a message approval request for which the sensory transaction is the payload.
 // The request is gossipped around and the peers will respond with an approval or disapproval.
 func (g *Node) OnBlockCommitted(txID string, channelID string) {
-	g.logger.Debug("BLOCC: OnBlockCommitted called")
+	g.logger.Debug("BLOCC: OnBlockCommitted started")
 	defer g.logger.Debug("BLOCC: OnBlockCommitted finished")
 
-	// TODO: One should check
-	// 1. if the peer exists;
-	// 2. if the peer is in the channel,
-	// 3. if the peer is online, and lastly that this peer is the one specified by
-	// channelLeader policy
-	if g.selfIdentity.ExtractMSPID() != "Org1MSP" {
-		// TODO: this is hardcoded for Org1MSP, need to be for channel leader
-		g.logger.Debug("BLOCC: Not Org1MSP, returning")
+	// Security Check 1.0 - Checking if the channel exists
+	gossipChannel := g.chanState.getGossipChannelByChainID(common.ChannelID(channelID))
+	if gossipChannel == nil {
+		g.logger.Errorf("BLOCC: Channel %s not found for gossiping approval message", channelID)
 		return
 	}
 
-	// TODO: this is hardcoded for the channel mychannel, need to be general in future
+	// Security Check 2.0 - Checking if the peer belongs to the channel
+	if !gossipChannel.IsMemberInChan(g.selfNetworkMember()) {
+		g.logger.Errorf("BLOCC: %s does not belong to channel %s", g.selfOrg, channelID)
+		return
+	}
+
 	gossipMsg := &pg.GossipMessage{
 		Channel: common.ChannelID(channelID),
 		Nonce:   util.RandomUInt64(),
@@ -100,8 +101,7 @@ func (g *Node) OnBlockCommitted(txID string, channelID string) {
 		},
 	}
 
-	// TODO: this is hardcoded for the channel mychannel, need to be general in future
-	gossipChan := g.chanState.getGossipChannelByChainID(common.ChannelID(channelID))
+	gossipChan := gossipChannel
 	if gossipChan != nil {
 		g.Gossip(gossipMsg)
 	}

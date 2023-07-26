@@ -2,7 +2,6 @@ package bscc
 
 import (
 	"fmt"
-	"github.com/pkg/errors"
 	"io/ioutil"
 	"os"
 	"time"
@@ -15,6 +14,7 @@ import (
 	"github.com/hyperledger/fabric/core/peer"
 	blocc "github.com/hyperledger/fabric/internal/peer/blocc/chaincode"
 	"github.com/hyperledger/fabric/protoutil"
+	"github.com/pkg/errors"
 )
 
 func New(peerInstance *peer.Peer) *BSCC {

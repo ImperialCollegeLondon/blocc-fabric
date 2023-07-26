@@ -41,6 +41,10 @@ type gossipMock struct {
 	mock.Mock
 }
 
+func (g *gossipMock) OnBlockCommitted(txID string, channelID string) {
+	panic("implement me")
+}
+
 func (g *gossipMock) SelfChannelInfo(common.ChannelID) *protoext.SignedGossipMessage {
 	panic("implement me")
 }

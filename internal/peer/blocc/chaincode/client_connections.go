@@ -2,6 +2,10 @@ package chaincode
 
 import (
 	"crypto/tls"
+	"io/ioutil"
+	"strings"
+	"time"
+
 	pb "github.com/hyperledger/fabric-protos-go/peer"
 	"github.com/hyperledger/fabric/bccsp"
 	"github.com/hyperledger/fabric/internal/peer/common"
@@ -9,9 +13,6 @@ import (
 	"github.com/hyperledger/fabric/internal/pkg/identity"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
-	"io/ioutil"
-	"strings"
-	"time"
 )
 
 // ClientConnections holds the clients for connecting to the various

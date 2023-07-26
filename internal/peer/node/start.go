@@ -9,7 +9,6 @@ package node
 import (
 	"context"
 	"fmt"
-	"github.com/hyperledger/fabric/core/scc/bscc"
 	"io"
 	"io/ioutil"
 	"net"
@@ -74,6 +73,7 @@ import (
 	"github.com/hyperledger/fabric/core/peer"
 	"github.com/hyperledger/fabric/core/policy"
 	"github.com/hyperledger/fabric/core/scc"
+	"github.com/hyperledger/fabric/core/scc/bscc"
 	"github.com/hyperledger/fabric/core/scc/cscc"
 	"github.com/hyperledger/fabric/core/scc/lscc"
 	"github.com/hyperledger/fabric/core/scc/qscc"
@@ -443,7 +443,10 @@ func serve(args []string) error {
 		cb.HeaderType_CONFIG: &peer.ConfigTxProcessor{},
 	}
 
-	blockCommitter := gossipservice.GossipBlockCommitterImpl{}
+	blockCommitter := gossipservice.GossipBlockCommitterImpl{
+		PolicyManagerGetterFunc: policyMgr,
+		ThisPeer:                signingIdentity.GetPublicVersion(),
+	}
 
 	peerInstance.LedgerMgr = ledgermgmt.NewLedgerMgr(
 		&ledgermgmt.Initializer{

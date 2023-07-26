@@ -1,3 +1,7 @@
+/*
+SPDX-License-Identifier: Apache-2.0
+*/
+
 package chaincode
 
 import (
@@ -19,8 +23,6 @@ var logger = flogging.MustGetLogger("cli.blocc.chaincode")
 
 // Cmd returns the cobra command for Chaincode
 func Cmd(cryptoProvider bccsp.BCCSP) *cobra.Command {
-	//addFlags(chaincodeCmd)
-
 	chaincodeCmd.AddCommand(ApproveForThisPeerCmd(nil, cryptoProvider))
 
 	logger.Debugf("bloccCmd: %v", chaincodeCmd)

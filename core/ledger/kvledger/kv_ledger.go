@@ -9,7 +9,6 @@ package kvledger
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/hyperledger/fabric/gossip/service"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -34,6 +33,7 @@ import (
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/validation"
 	"github.com/hyperledger/fabric/core/ledger/pvtdatapolicy"
 	"github.com/hyperledger/fabric/core/ledger/pvtdatastorage"
+	"github.com/hyperledger/fabric/gossip/service"
 	"github.com/hyperledger/fabric/internal/pkg/txflags"
 	"github.com/hyperledger/fabric/protoutil"
 	"github.com/pkg/errors"

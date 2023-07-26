@@ -13,6 +13,7 @@ import (
 	gproto "github.com/hyperledger/fabric-protos-go/gossip"
 	tspb "github.com/hyperledger/fabric-protos-go/transientstore"
 	"github.com/hyperledger/fabric/common/flogging"
+	"github.com/hyperledger/fabric/common/policies"
 	"github.com/hyperledger/fabric/core/committer"
 	"github.com/hyperledger/fabric/core/committer/txvalidator"
 	"github.com/hyperledger/fabric/core/common/privdata"
@@ -34,6 +35,7 @@ import (
 	"github.com/hyperledger/fabric/internal/pkg/identity"
 	"github.com/hyperledger/fabric/internal/pkg/peer/blocksprovider"
 	"github.com/hyperledger/fabric/internal/pkg/peer/orderers"
+	"github.com/hyperledger/fabric/msp"
 	"github.com/hyperledger/fabric/protoutil"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -121,10 +123,25 @@ type GossipBlockCommitter interface {
 
 // GossipBlockCommitterImpl Implementation of GossipBlockCommitter
 type GossipBlockCommitterImpl struct {
-	GossipSvc gossipSvc
+	PolicyManagerGetterFunc policies.PolicyManagerGetterFunc
+	ThisPeer                msp.Identity
+	GossipSvc               gossipSvc
 }
 
+// OnBlockCommitted Tries to gossip the block after being committed. Only the channel leader will gossip the block.
+// This is subject to check of the channel leader policy and the passed identity (this peer).
 func (g *GossipBlockCommitterImpl) OnBlockCommitted(txID string, channelID string) {
+	channelLeaderPolicy, ok := g.PolicyManagerGetterFunc(channelID).GetPolicy("ChannelLeader")
+	if !ok {
+		logger.Errorf("Failed to get channel leader policy for channel %s", channelID)
+		return
+	}
+	err := channelLeaderPolicy.EvaluateIdentities([]msp.Identity{g.ThisPeer})
+	if err != nil {
+		logger.Infof("%s is not the leader of channel %s, not gossiping approval for transaction %s",
+			g.ThisPeer.GetMSPIdentifier(), channelID, txID)
+		return
+	}
 	g.GossipSvc.OnBlockCommitted(txID, channelID)
 }
 

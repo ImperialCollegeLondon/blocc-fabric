@@ -9,7 +9,6 @@ package ledgermgmt
 import (
 	"bytes"
 	"fmt"
-	"github.com/hyperledger/fabric/gossip/service"
 	"sync"
 
 	"github.com/hyperledger/fabric-protos-go/common"
@@ -20,6 +19,7 @@ import (
 	"github.com/hyperledger/fabric/core/ledger"
 	"github.com/hyperledger/fabric/core/ledger/cceventmgmt"
 	"github.com/hyperledger/fabric/core/ledger/kvledger"
+	"github.com/hyperledger/fabric/gossip/service"
 	"github.com/hyperledger/fabric/internal/fileutil"
 	"github.com/pkg/errors"
 )
