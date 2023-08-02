@@ -104,7 +104,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v4
         with:
-          images: ${{ env.REGISTRY }}/${{ github.actor }}/fabric-${{ matrix.COMPONENT }}
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/fabric-${{ matrix.COMPONENT }}
 
       - name: Build and push ${{ matrix.COMPONENT }} Image
         id: push
