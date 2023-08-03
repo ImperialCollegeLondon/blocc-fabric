@@ -166,14 +166,17 @@ func (bscc *BSCC) gatherOrdererInfo(channelID string) (address string, rootCertF
 		return "", nil, err
 	}
 
-	orderer, ok := ordererOrg["OrdererOrg"]
-	if !ok {
-		return "", nil, errors.New("orderer org not found")
+	if len(ordererOrg) == 0 {
+		return "", nil, errors.New("No orderer organization found")
+	} else {
+		for _, orderer := range ordererOrg {
+			// TODO: This is a hack, we should not assume that the orderer has only one address and one root cert.
+			// To be checked against multiple orderers.
+			return orderer.Addresses[0], orderer.RootCerts[0], nil
+		}
 	}
 
-	// TODO: This is a hack, we should not assume that the orderer has only one address and one root cert.
-	// To be checked against multiple orderers.
-	return orderer.Addresses[0], orderer.RootCerts[0], nil
+	return "", nil, errors.New("Error occurred gathering orderer info")
 }
 
 func (bscc *BSCC) createTempFile(rootCertFile []byte) (string, error) {
