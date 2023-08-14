@@ -210,6 +210,30 @@ func IsConfigBlock(block *cb.Block) bool {
 	return cb.HeaderType(hdr.Type) == cb.HeaderType_CONFIG || cb.HeaderType(hdr.Type) == cb.HeaderType_ORDERER_TRANSACTION
 }
 
+// IsForkBlock validates whenever given block contains fork proof
+func IsForkBlock(block *cb.Block) bool {
+	envelope, err := ExtractEnvelope(block, 0)
+	if err != nil {
+		return false
+	}
+
+	payload, err := UnmarshalPayload(envelope.Payload)
+	if err != nil {
+		return false
+	}
+
+	if payload.Header == nil {
+		return false
+	}
+
+	hdr, err := UnmarshalChannelHeader(payload.Header.ChannelHeader)
+	if err != nil {
+		return false
+	}
+
+	return cb.HeaderType(hdr.Type) == cb.HeaderType_EQUIVOCATION_PROOF
+}
+
 // ChannelHeader returns the *cb.ChannelHeader for a given *cb.Envelope.
 func ChannelHeader(env *cb.Envelope) (*cb.ChannelHeader, error) {
 	if env == nil {

@@ -7,7 +7,9 @@ SPDX-License-Identifier: Apache-2.0
 package qscc
 
 import (
+	"encoding/json"
 	"fmt"
+	"github.com/hyperledger/fabric/protoutil"
 	"strconv"
 
 	"github.com/hyperledger/fabric-chaincode-go/shim"
@@ -15,12 +17,23 @@ import (
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/core/aclmgmt"
 	"github.com/hyperledger/fabric/core/ledger"
-	"github.com/hyperledger/fabric/protoutil"
 )
 
 // LedgerGetter gets the PeerLedger associated with a channel.
 type LedgerGetter interface {
 	GetLedger(cid string) ledger.PeerLedger
+}
+
+type TemperatureHumidityReading struct {
+	Temperature      float64 `json:"temperature"`
+	RelativeHumidity float64 `json:"relativeHumidity"`
+	Timestamp        int64   `json:"timestamp"`
+}
+
+type OutputEntry struct {
+	TxID            string                     `json:"txID"`
+	ApprovingMspIDs []string                   `json:"approvingMspIDs"`
+	Reading         TemperatureHumidityReading `json:"reading"`
 }
 
 // New returns an instance of QSCC.
@@ -49,11 +62,12 @@ var qscclogger = flogging.MustGetLogger("qscc")
 
 // These are function names from Invoke first parameter
 const (
-	GetChainInfo       string = "GetChainInfo"
-	GetBlockByNumber   string = "GetBlockByNumber"
-	GetBlockByHash     string = "GetBlockByHash"
-	GetTransactionByID string = "GetTransactionByID"
-	GetBlockByTxID     string = "GetBlockByTxID"
+	GetChainInfo            string = "GetChainInfo"
+	GetBlockByNumber        string = "GetBlockByNumber"
+	GetBlockByHash          string = "GetBlockByHash"
+	GetTransactionByID      string = "GetTransactionByID"
+	GetBlockByTxID          string = "GetBlockByTxID"
+	GetApprovedTransactions string = "GetApprovedTransactions"
 )
 
 // Init is called once per chain when the chain is created.
@@ -124,9 +138,135 @@ func (e *LedgerQuerier) Invoke(stub shim.ChaincodeStubInterface) pb.Response {
 		return getChainInfo(targetLedger)
 	case GetBlockByTxID:
 		return getBlockByTxID(targetLedger, args[2])
+	case GetApprovedTransactions:
+		return getApprovedTransactions(targetLedger, args[2])
 	}
 
 	return shim.Error(fmt.Sprintf("Requested function %s not found.", fname))
+}
+
+// getApprovedTransactions queries the ledger for transactions that have been approved by BSCC (Blockchain System Chaincode).
+// For each approved transaction, it retrieves the associated MSP IDs that have approved the transaction and the corresponding
+// temperature and humidity readings. The function returns a JSON array where each entry contains the transaction ID (TxID),
+// a list of approving MSP IDs, and the associated reading.
+//
+// Parameters:
+// - vledger: The peer ledger to query.
+// - chaincodeName: The name of the chaincode for which to retrieve approved transactions.
+//
+// Returns:
+// - A successful response contains a JSON array of approved transactions with their associated data.
+// - An error response contains a description of the error.
+//
+// Example of a returned JSON array:
+// [
+//
+//	{
+//	  "txID": "tx12345",
+//	  "approvingMspIDs": ["Org1MSP", "Org2MSP"],
+//	  "reading": {
+//	    "temperature": 22.5,
+//	    "relativeHumidity": 0.6,
+//	    "timestamp": 1628887200
+//	  }
+//	},
+//	...
+//
+// ]
+func getApprovedTransactions(vledger ledger.PeerLedger, chaincodeName []byte) pb.Response {
+	if chaincodeName == nil {
+		return shim.Error("Chaincode name must not be nil.")
+	}
+
+	ccName := string(chaincodeName)
+	qscclogger.Debugf("BLOCC: start querying the BSCC agreements associated to chaincode %s", ccName)
+
+	agreements := make(map[string]OutputEntry)
+	var blockNum uint64 = 0
+
+	for {
+		block, err := vledger.GetBlockByNumber(blockNum)
+		if err != nil {
+			errMsg := fmt.Sprintf("BLOCC: Failed to get block number %d, error %s", blockNum, err)
+			qscclogger.Error(errMsg)
+			return shim.Error(errMsg)
+		}
+
+		// End of ledger reached
+		if block == nil {
+			break
+		}
+
+		for _, data := range block.Data.Data {
+			isBscc, err := protoutil.IsBscc(data)
+			if err != nil {
+				errMsg := fmt.Sprintf("BLOCC: Failed to identify BSCC transaction, error %s", err)
+				qscclogger.Error(errMsg)
+				return shim.Error(errMsg)
+			}
+
+			// Skip non-BSCC transactions
+			if !isBscc {
+				continue
+			}
+
+			mspId, approvedTxId, err := protoutil.ExtractApprovalInfo(data)
+			if err != nil {
+				errMsg := fmt.Sprintf("BLOCC: Failed to extract approval info, error %s", err)
+				qscclogger.Error(errMsg)
+				return shim.Error(errMsg)
+			}
+
+			entry, exists := agreements[approvedTxId]
+			if exists {
+				entry.ApprovingMspIDs = append(entry.ApprovingMspIDs, mspId)
+				agreements[approvedTxId] = entry
+				continue
+			}
+
+			// Record reading if the approved transaction is unseen
+			sensorTransaction, err := vledger.GetTransactionByID(approvedTxId)
+			if err != nil {
+				errMsg := fmt.Sprintf("BLOCC: Failed to get transaction by ID, error %s", err)
+				qscclogger.Error(errMsg)
+				return shim.Error(errMsg)
+			}
+
+			temperature, relativeHumidity, timestamp, err := protoutil.ExtractTemperatureHumidityReadingFromEnvelope(sensorTransaction.GetTransactionEnvelope())
+			if err != nil {
+				errMsg := fmt.Sprintf("BLOCC: Failed to fetch reading from approved transaction %s, error %s", approvedTxId, err)
+				qscclogger.Error(errMsg)
+				return shim.Error(errMsg)
+			}
+
+			agreements[approvedTxId] = OutputEntry{
+				TxID:            approvedTxId,
+				ApprovingMspIDs: []string{mspId},
+				Reading: TemperatureHumidityReading{
+					Temperature:      temperature,
+					RelativeHumidity: relativeHumidity,
+					Timestamp:        timestamp,
+				},
+			}
+		}
+
+		blockNum++
+	}
+
+	var result []OutputEntry
+	for _, entry := range agreements {
+		result = append(result, entry)
+	}
+
+	jsonResponse, err := json.Marshal(result)
+	if err != nil {
+		errMsg := fmt.Sprintf("BLOCC: Failed to marshal the result to JSON, error %s", err)
+		qscclogger.Error(errMsg)
+		return shim.Error(errMsg)
+	}
+
+	return shim.Success(jsonResponse)
+
 }
 
 func getTransactionByID(vledger ledger.PeerLedger, tid []byte) pb.Response {

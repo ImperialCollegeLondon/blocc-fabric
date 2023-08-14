@@ -65,30 +65,10 @@ func ApproveForThisPeerCmd(a *ApproveForThisPeer, cryptoProvider bccsp.BCCSP) *c
 		Long:  "FOR INTERNAL USE ONLY. Approve a sensory reading for this peer",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if a == nil {
-				// Log every input element
-				logger.Debugf("OrdererAddress: %v", ordererAddress)
-				logger.Debugf("RootCertFilePath: %v", rootCertFilePath)
-				logger.Debugf("channelID: %v", channelID)
-				logger.Debugf("txID: %v", txID)
-				logger.Debugf("peerAddress: %v", peerAddress)
-				logger.Debugf("connectionProfilePath: %v", connectionProfilePath)
-				logger.Debugf("waitForEvent: %v", waitForEvent)
-				logger.Debugf("waitForEventTimeout: %v", waitForEventTimeout)
-
 				input, err := a.createInput()
 				if err != nil {
 					return err
 				}
-
-				// Log every input element
-				logger.Debugf("OrdererAddress: %v", input.OrdererAddress)
-				logger.Debugf("RootCertFilePath: %v", input.RootCertFilePath)
-				logger.Debugf("channelID: %v", input.ChannelID)
-				logger.Debugf("txID: %v", input.TxID)
-				logger.Debugf("peerAddress: %v", input.PeerAddress)
-				logger.Debugf("connectionProfilePath: %v", input.ConnectionProfilePath)
-				logger.Debugf("waitForEvent: %v", input.WaitForEvent)
-				logger.Debugf("waitForEventTimeout: %v", input.WaitForEventTimeout)
 
 				ccInput := &ClientConnectionsInput{
 					CommandName:           cmd.Name(),
@@ -236,14 +216,6 @@ func (a *ApproveForThisPeer) Approve() error {
 }
 
 func (a *ApproveForThisPeer) createInput() (*ApproveForThisPeerInput, error) {
-	logger.Debugf("OrdererAddress: %v", ordererAddress)
-	logger.Debugf("RootCertFilePath: %v", rootCertFilePath)
-	logger.Debugf("channelID: %v", channelID)
-	logger.Debugf("txID: %v", txID)
-	logger.Debugf("waitForEvent: %v", waitForEvent)
-	logger.Debugf("waitForEventTimeout: %v", waitForEventTimeout)
-	logger.Debugf("peerAddress: %v", peerAddress)
-
 	input := &ApproveForThisPeerInput{
 		OrdererAddress:      ordererAddress,
 		RootCertFilePath:    rootCertFilePath,
@@ -253,7 +225,6 @@ func (a *ApproveForThisPeer) createInput() (*ApproveForThisPeerInput, error) {
 		WaitForEventTimeout: waitForEventTimeout,
 		PeerAddress:         peerAddress,
 	}
-	logger.Debugf("ApproveForThisPeerCmd: input: %+v", input)
 
 	return input, nil
 }

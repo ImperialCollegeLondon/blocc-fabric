@@ -7,6 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package etcdraft
 
 import (
+	"bytes"
 	"context"
 	"encoding/pem"
 	"fmt"
@@ -169,6 +170,9 @@ type Chain struct {
 	errorCLock sync.RWMutex
 	errorC     chan struct{} // returned by Errored()
 
+	forkCLock sync.RWMutex
+	forkC     chan struct{} // returned by Forked()
+
 	raftMetadataLock     sync.RWMutex
 	confChangeInProgress *raftpb.ConfChange
 	justElected          bool // this is true when node has just been elected
@@ -269,6 +273,7 @@ func NewChain(
 		startC:            make(chan struct{}),
 		snapC:             make(chan *raftpb.Snapshot),
 		errorC:            make(chan struct{}),
+		forkC:             make(chan struct{}),
 		gcC:               make(chan *gc),
 		observeC:          observeC,
 		support:           support,
@@ -371,6 +376,7 @@ func (c *Chain) Start() {
 
 	close(c.startC)
 	close(c.errorC)
+	close(c.forkC)
 
 	go c.gc()
 	go c.run()
@@ -427,6 +433,13 @@ func (c *Chain) Errored() <-chan struct{} {
 	c.errorCLock.RLock()
 	defer c.errorCLock.RUnlock()
 	return c.errorC
+}
+
+// Forked returns a channel that closes when the chain forks.
+func (c *Chain) Forked() <-chan struct{} {
+	c.forkCLock.RLock()
+	defer c.forkCLock.RUnlock()
+	return c.forkC
 }
 
 // Halt stops the chain.
@@ -767,6 +780,10 @@ func (c *Chain) run() {
 					c.errorCLock.Lock()
 					c.errorC = make(chan struct{})
 					c.errorCLock.Unlock()
+
+					c.forkCLock.Lock()
+					c.forkC = make(chan struct{})
+					c.forkCLock.Unlock()
 				}
 
 				if isCandidate(app.soft.RaftState) || newLeader == raft.None {
@@ -867,8 +884,10 @@ func (c *Chain) run() {
 
 			select {
 			case <-c.errorC: // avoid closing closed channel
+			case <-c.forkC: // avoid closing closed channel
 			default:
 				close(c.errorC)
+				close(c.forkC)
 			}
 
 			c.logger.Infof("Stop serving requests")
@@ -879,6 +898,41 @@ func (c *Chain) run() {
 }
 
 func (c *Chain) writeBlock(block *common.Block, index uint64) {
+	isForkAttempt := c.isPossibleFork(block)
+	if isForkAttempt {
+		// Log was is inside c.forkC
+		select {
+		case _, ok := <-c.forkC:
+			if !ok {
+				c.logger.Debug("Fork channel is closed")
+			} else {
+				c.logger.Debug("Fork channel is open and contains data")
+			}
+		default:
+			c.logger.Debug("Fork channel is open but does not contain data")
+		}
+
+		c.logger.Debug("WriteBlock Fork address:", c.forkC)
+		c.logger.Debug("Sending fork event")
+		c.forkCLock.Lock()
+		c.logger.Debug("Locking fork channel")
+		c.forkC <- struct{}{}
+		c.logger.Debug("Unlocking fork channel")
+		c.forkCLock.Unlock()
+		c.logger.Debug("Fork event sent")
+
+		select {
+		case _, ok := <-c.forkC:
+			if !ok {
+				c.logger.Debug("Fork channel is closed")
+			} else {
+				c.logger.Debug("Fork channel is open and contains data")
+			}
+		default:
+			c.logger.Debug("Fork channel is open but does not contain data")
+		}
+	}
+
 	if block.Header.Number > c.lastBlock.Header.Number+1 {
 		c.logger.Panicf("Got block [%d], expect block [%d]", block.Header.Number, c.lastBlock.Header.Number+1)
 	} else if block.Header.Number < c.lastBlock.Header.Number+1 {
@@ -904,6 +958,11 @@ func (c *Chain) writeBlock(block *common.Block, index uint64) {
 	c.raftMetadataLock.Unlock()
 
 	c.support.WriteBlock(block, m)
+
+	c.logger.Debug("Chain is:", c.channelID)
+	c.logger.Debug("Active nodes are:", c.ActiveNodes)
+	c.logger.Debug("Node is:", c.Node)
+	c.logger.Debug("Is chain running:", c.isRunning())
 }
 
 // Orders the envelope in the `msg` content. SubmitRequest.
@@ -1571,3 +1630,122 @@ func (c *Chain) checkForEvictionNCertRotation(env *common.Envelope) bool {
 	c.logger.Debugf("Node %d is still part of the consenters set", c.raftID)
 	return false
 }
+
+// isPossibleFork returns true if:
+// 1. the committed block number is smaller than the height of all orderers, and
+// 1a. the block hash of the committed block is not the same as corresponding block hash of all orderers for
+// the same block number.
+func (c *Chain) isPossibleFork(incomingBlock *common.Block) bool {
+	// Genesis block is not a fork
+	if c.support.Height() == 0 {
+		return false
+	}
+
+	incomingBlockNumber := incomingBlock.Header.Number
+	lastBlockNumber := c.support.Height() - 1
+
+	// If the incoming block number is smaller or equal to the current height of the orderer, then it is possible that
+	// the orderer is forked.
+	if incomingBlockNumber <= lastBlockNumber {
+		c.logger.Infof("Possible fork detected. Checking if this orderer is up to date.")
+	}
+
+	puller, err := c.createPuller()
+	if err != nil {
+		c.logger.Errorf("It was not possible to check for forks. Error creating a puller: %s", err)
+		return false
+	}
+
+	var maxHeight uint64
+	var mostUpToDateEndpoint string
+	heightsByEndpoints, err := puller.HeightsByEndpoints()
+	if err != nil {
+		c.logger.Errorf("It was not possible to check for forks. Error getting heights by endpoints: %s", err)
+		return false
+	}
+
+	for endpoint, height := range heightsByEndpoints {
+		if height >= maxHeight {
+			maxHeight = height
+			mostUpToDateEndpoint = endpoint
+		}
+	}
+
+	mostUpdatedLastBlockNumber := maxHeight - 1
+
+	// If the incoming block number is smaller or equal to the current height of the orderer, then it is possible that
+	// the orderer is forked.
+	if incomingBlockNumber <= mostUpdatedLastBlockNumber {
+		block := puller.PullBlock(incomingBlockNumber)
+		if block == nil {
+			c.logger.Errorf("Error pulling block %d from %s", incomingBlockNumber, mostUpToDateEndpoint)
+		}
+		// Check if the block hash of the incoming block is the same as the block hash of the most up-to-date orderer
+		// for the same block number.
+		expectedHash := protoutil.BlockDataHash(block.Data)
+		actualHash := protoutil.BlockDataHash(incomingBlock.Data)
+		if !bytes.Equal(expectedHash, actualHash) {
+			c.logger.Infof("Fork attempt detected. Expected block hash %x, actual block hash %x", expectedHash, actualHash)
+			return true
+		}
+	}
+
+	c.logger.Infof("No fork attempt detected.")
+	return false
+}
+
+//func (c *Chain) updateHeaderToEquivocationType(incomingBlock *common.Block) error {
+//	// Update the header
+//	envelope, err := protoutil.ExtractEnvelope(incomingBlock, 0)
+//	if err != nil {
+//		return err
+//	}
+//	hdr, err := protoutil.ChannelHeader(envelope)
+//	if err != nil {
+//		return err
+//	}
+//	hdr.Type = int32(common.HeaderType_EQUIVOCATION_PROOF)
+//
+//	// Re-serialize the block
+//
+//	return nil
+//}
+//
+//func (c *Chain) updateHeaderToEquivocationType(incomingBlock *common.Block) error {
+//	// Unmarshal the block's data to a Payload
+//	payload := &common.Payload{}
+//	err := proto.Unmarshal(incomingBlock.Data.Data, payload)
+//	if err != nil {
+//		return err
+//	}
+//
+//	// Unmarshal the payload's header to a ChannelHeader
+//	channelHeader := &common.ChannelHeader{}
+//	err = proto.Unmarshal(payload.Header.ChannelHeader, channelHeader)
+//	if err != nil {
+//		return err
+//	}
+//
+//	// Update the header type to EQUIVOCATION_PROOF
+//	channelHeader.Type = int32(common.HeaderType_EQUIVOCATION_PROOF)
+//
+//	// Marshal the ChannelHeader back to bytes
+//	channelHeaderBytes, err := proto.Marshal(channelHeader)
+//	if err != nil {
+//		return err
+//	}
+//
+//	// Update the payload's ChannelHeader
+//	payload.Header.ChannelHeader = channelHeaderBytes
+//
+//	// Marshal the Payload back to bytes
+//	payloadBytes, err := proto.Marshal(payload)
+//	if err != nil {
+//		return err
+//	}
+//
+//	// Update the block's data
+//	incomingBlock.Data.Data = payloadBytes
+//
+//	return nil
+//}

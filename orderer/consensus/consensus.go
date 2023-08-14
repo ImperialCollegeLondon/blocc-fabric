@@ -83,6 +83,9 @@ type Chain interface {
 	// clients when the consenter is not up to date.
 	Errored() <-chan struct{}
 
+	// Forked returns a channel which closes when the backing consenter has forked
+	Forked() <-chan struct{}
+
 	// Start should allocate whatever resources are needed for staying up to date with the chain.
 	// Typically, this involves creating a thread which reads from the ordering source, passes those
 	// messages to a block cutter, and writes the resulting blocks to the ledger.

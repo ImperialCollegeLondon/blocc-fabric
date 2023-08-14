@@ -23,6 +23,7 @@ type chain struct {
 	support  consensus.ConsenterSupport
 	sendChan chan *message
 	exitChan chan struct{}
+	forkChan chan struct{}
 }
 
 type message struct {
@@ -49,6 +50,7 @@ func newChain(support consensus.ConsenterSupport) *chain {
 		support:  support,
 		sendChan: make(chan *message),
 		exitChan: make(chan struct{}),
+		forkChan: make(chan struct{}),
 	}
 }
 
@@ -98,6 +100,10 @@ func (ch *chain) Configure(config *cb.Envelope, configSeq uint64) error {
 // Errored only closes on exit
 func (ch *chain) Errored() <-chan struct{} {
 	return ch.exitChan
+}
+
+func (ch *chain) Forked() <-chan struct{} {
+	return ch.forkChan
 }
 
 func (ch *chain) main() {

@@ -64,6 +64,7 @@ func newBlockWriter(lastBlock *cb.Block, r *Registrar, support blockWriterSuppor
 }
 
 // CreateNextBlock creates a new block with the next block number, and the given contents.
+// BLOCC: This apparently is never used, except in tests.
 func (bw *BlockWriter) CreateNextBlock(messages []*cb.Envelope) *cb.Block {
 	previousBlockHash := protoutil.BlockHeaderHash(bw.lastBlock.Header)
 

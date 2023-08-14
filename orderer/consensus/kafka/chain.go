@@ -110,6 +110,8 @@ type chainImpl struct {
 	// When the partition consumer errors, close the channel. Otherwise, make
 	// this an open, unbuffered channel.
 	errorChan chan struct{}
+	// Forked channel is closed when the chain is forked.
+	forkedChan chan struct{}
 	// When a Halt() request comes, close the channel. Unlike errorChan, this
 	// channel never re-opens when closed. Its closing triggers the exit of the
 	// processMessagesToBlock loop.
@@ -122,6 +124,17 @@ type chainImpl struct {
 	timer <-chan time.Time
 
 	replicaIDs []int32
+}
+
+func (chain *chainImpl) Forked() <-chan struct{} {
+	select {
+	case <-chain.startChan:
+		return chain.forkedChan
+	default:
+		// While the consenter is starting, return empty channel because
+		// the chain is not forked yet.
+		return make(chan struct{})
+	}
 }
 
 // Errored returns a channel which will close when a partition consumer error

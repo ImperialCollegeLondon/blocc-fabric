@@ -49,6 +49,9 @@ type Chain interface {
 
 	// Errored returns a channel which closes when the backing consenter has errored
 	Errored() <-chan struct{}
+
+	// Forked returns a channel which closes when the backing consenter has forked
+	Forked() <-chan struct{}
 }
 
 //go:generate counterfeiter -o mock/policy_checker.go -fake-name PolicyChecker . PolicyChecker
@@ -226,6 +229,26 @@ func (h *Handler) deliverBlocks(ctx context.Context, srv *Server, envelope *cb.E
 	if err = proto.Unmarshal(payload.Data, seekInfo); err != nil {
 		logger.Warningf("[channel: %s] Received a signed deliver request from %s with malformed seekInfo payload: %s", chdr.ChannelId, addr, err)
 		return cb.Status_BAD_REQUEST, nil
+	}
+
+	forkedChan := chain.Forked()
+	logger.Debug("Fork address:", forkedChan)
+	select {
+	case _, ok := <-forkedChan:
+		if !ok {
+			logger.Debug("Fork channel is closed")
+		} else {
+			logger.Debug("Fork channel is open and contains data")
+		}
+	default:
+		logger.Debug("Fork channel is open but does not contain data")
+	}
+	logger.Debugf("[channel: %s] Checking if channel is forked", chdr.ChannelId)
+	select {
+	case <-forkedChan:
+		logger.Warningf("[channel: %s] Rejecting deliver request for %s because of chain fork", chdr.ChannelId, addr)
+		return cb.Status_FORKED, nil
+	default:
 	}
 
 	erroredChan := chain.Errored()

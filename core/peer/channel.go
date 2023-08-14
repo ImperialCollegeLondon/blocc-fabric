@@ -152,6 +152,16 @@ func (c *Channel) Errored() <-chan struct{} {
 	return nil
 }
 
+// Forked returns a channel that can be used to determine if a backing
+// resource has forked. At this point in time, the peer does not have any
+// error conditions that lead to this function signaling that a fork has
+// occurred.
+func (c *Channel) Forked() <-chan struct{} {
+	// If this is ever updated to return a real channel, the error message
+	// in deliver.go around this channel closing should be updated.
+	return nil
+}
+
 func capabilitiesSupportedOrPanic(res channelconfig.Resources) {
 	ac, ok := res.ApplicationConfig()
 	if !ok {

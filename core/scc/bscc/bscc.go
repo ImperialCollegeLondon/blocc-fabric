@@ -2,10 +2,6 @@ package bscc
 
 import (
 	"fmt"
-	"io/ioutil"
-	"os"
-	"time"
-
 	"github.com/hyperledger/fabric-chaincode-go/shim"
 	pb "github.com/hyperledger/fabric-protos-go/peer"
 	"github.com/hyperledger/fabric/bccsp"
@@ -13,13 +9,19 @@ import (
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/core/peer"
 	blocc "github.com/hyperledger/fabric/internal/peer/blocc/chaincode"
+	"github.com/hyperledger/fabric/internal/pkg/comm"
 	"github.com/hyperledger/fabric/protoutil"
 	"github.com/pkg/errors"
+	"github.com/spf13/cobra"
+	"io/ioutil"
+	"os"
 )
 
-func New(peerInstance *peer.Peer) *BSCC {
+func New(peerInstance *peer.Peer, server *comm.GRPCServer, command *cobra.Command) *BSCC {
 	return &BSCC{
 		peerInstance: peerInstance,
+		peerServer:   server,
+		unjoin:       command,
 	}
 }
 
@@ -34,15 +36,14 @@ func (bscc *BSCC) Chaincode() shim.Chaincode {
 type BSCC struct {
 	peerInstance *peer.Peer
 	config       Config
+	peerServer   *comm.GRPCServer
+	unjoin       *cobra.Command
 }
 
 type Config struct {
-	PeerAddress         string
-	TLSCertFile         string
-	OrgMspID            string
-	WaitForEvent        bool
-	WaitForEventTimeout time.Duration
-	CryptoProvider      bccsp.BCCSP
+	PeerAddress    string
+	TLSCertFile    string
+	CryptoProvider bccsp.BCCSP
 }
 
 var bloccProtoLogger = flogging.MustGetLogger("bscc")
@@ -60,6 +61,8 @@ func (f InvalidFunctionError) Error() string {
 }
 
 // -------------------- Stub Interface ------------------- //
+
+var index uint64
 
 func (bscc *BSCC) Init(stub shim.ChaincodeStubInterface) pb.Response {
 	bloccProtoLogger.Info("Init BSCC")
@@ -81,21 +84,12 @@ func (bscc *BSCC) Init(stub shim.ChaincodeStubInterface) pb.Response {
 		return shim.Error("CORE_PEER_TLS_ROOTCERT_FILE is not set")
 	}
 
-	orgMspID, ok := os.LookupEnv("CORE_PEER_LOCALMSPID")
-	if !ok {
-		bloccProtoLogger.Error("CORE_PEER_LOCALMSPID is not set")
-		return shim.Error("CORE_PEER_LOCALMSPID is not set")
-	}
-
 	bscc.config = Config{
-		PeerAddress:         peerAddress,
-		TLSCertFile:         tlsCertFile,
-		OrgMspID:            orgMspID,
-		WaitForEvent:        true,
-		WaitForEventTimeout: 3 * time.Second,
-		CryptoProvider:      bscc.peerInstance.CryptoProvider,
+		PeerAddress:    peerAddress,
+		TLSCertFile:    tlsCertFile,
+		CryptoProvider: bscc.peerInstance.CryptoProvider,
 	}
-
+	index = 1
 	return shim.Success(nil)
 }
 
@@ -139,8 +133,24 @@ func (bscc *BSCC) Invoke(stub shim.ChaincodeStubInterface) pb.Response {
 // ----------------- BSCC Implementation ----------------- //
 
 func (bscc *BSCC) processEvent(event event.Event) {
+	var err error
 	bloccProtoLogger.Info("BLOCC - Received approval event:", event)
-
+	bloccProtoLogger.Debug("index:", index)
+	//if index == 2 {
+	//	bscc.peerServer.Stop()
+	//	bscc.unjoin.SetArgs([]string{
+	//		"--channelID=" + event.ChannelID,
+	//	})
+	//	err = bscc.unjoin.Execute()
+	//	if err != nil {
+	//		bloccProtoLogger.Errorf("Failed to unjoin channel: %s", err)
+	//	}
+	//	err = bscc.peerServer.Start()
+	//	if err != nil {
+	//		bloccProtoLogger.Errorf("Failed to start peer server: %s", err)
+	//	}
+	//}
+	index++
 	address, rootCertFile, err := bscc.gatherOrdererInfo(event.ChannelID)
 	if err != nil {
 		bloccProtoLogger.Errorf("Failed to gather orderer info: %s", err)

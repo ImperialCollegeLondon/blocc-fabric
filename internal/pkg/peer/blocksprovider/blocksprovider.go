@@ -124,6 +124,7 @@ func (d *Deliverer) DeliverBlocks() {
 	for {
 		select {
 		case <-d.DoneC:
+			d.Logger.Info("Done channel closed, exiting")
 			return
 		default:
 		}
@@ -173,6 +174,7 @@ func (d *Deliverer) DeliverBlocks() {
 		go func() {
 			for {
 				resp, err := deliverClient.Recv()
+				d.Logger.Debug("Response is: ", resp)
 				if err != nil {
 					connLogger.Warningf("Encountered an error reading from deliver stream: %s", err)
 					close(recv)

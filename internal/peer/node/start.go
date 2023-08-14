@@ -9,6 +9,7 @@ package node
 import (
 	"context"
 	"fmt"
+	"github.com/hyperledger/fabric/common/forknotifier"
 	"io"
 	"io/ioutil"
 	"net"
@@ -724,7 +725,7 @@ func serve(args []string) error {
 		factory.GetDefault(),
 	)
 	qsccInst := scc.SelfDescribingSysCC(qscc.New(aclProvider, peerInstance))
-	bsccInst := bscc.New(peerInstance)
+	bsccInst := bscc.New(peerInstance, peerServer, unjoinCmd())
 
 	pb.RegisterChaincodeSupportServer(ccSrv.Server(), ccSupSrv)
 
@@ -936,6 +937,21 @@ func serve(args []string) error {
 			grpcErr = fmt.Errorf("grpc server exited with error: %s", grpcErr)
 		}
 		serve <- grpcErr
+	}()
+
+	// The peer has joined the channels, we can now start the goroutine to listen to possible fork events
+	go func() {
+		logger.Debug("Starting fork notifier")
+		for {
+			forkChannel := forknotifier.GetForkNotificationsChannel()
+			print("forkChannel: ", forkChannel)
+			select {
+			case forkNotification := <-forkChannel:
+				if forkNotification {
+					logger.Debug("Received fork notification")
+				}
+			}
+		}
 	}()
 
 	// Block until grpc server exits

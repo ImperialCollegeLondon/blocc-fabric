@@ -34,6 +34,7 @@ const (
 	Status_INTERNAL_SERVER_ERROR    Status = 500
 	Status_NOT_IMPLEMENTED          Status = 501
 	Status_SERVICE_UNAVAILABLE      Status = 503
+	Status_FORKED				    Status = 600
 )
 
 var Status_name = map[int32]string{
@@ -46,6 +47,7 @@ var Status_name = map[int32]string{
 	500: "INTERNAL_SERVER_ERROR",
 	501: "NOT_IMPLEMENTED",
 	503: "SERVICE_UNAVAILABLE",
+	600: "FORKED",
 }
 
 var Status_value = map[string]int32{
@@ -58,6 +60,7 @@ var Status_value = map[string]int32{
 	"INTERNAL_SERVER_ERROR":    500,
 	"NOT_IMPLEMENTED":          501,
 	"SERVICE_UNAVAILABLE":      503,
+	"FORKED":					600,
 }
 
 func (x Status) String() string {
@@ -79,7 +82,8 @@ const (
 	HeaderType_DELIVER_SEEK_INFO    HeaderType = 5
 	HeaderType_CHAINCODE_PACKAGE    HeaderType = 6
 	// BLOCC Protocol
-	HeaderType_PEER_SIGNATURE_TX HeaderType = 10
+	HeaderType_PEER_SIGNATURE_TX    HeaderType = 10
+	HeaderType_EQUIVOCATION_PROOF   HeaderType = 11
 )
 
 var HeaderType_name = map[int32]string{
@@ -91,6 +95,7 @@ var HeaderType_name = map[int32]string{
 	5:  "DELIVER_SEEK_INFO",
 	6:  "CHAINCODE_PACKAGE",
 	10: "PEER_SIGNATURE_TX",
+	11: "EQUIVOCATION_PROOF",
 }
 
 var HeaderType_value = map[string]int32{
@@ -102,6 +107,7 @@ var HeaderType_value = map[string]int32{
 	"DELIVER_SEEK_INFO":    5,
 	"CHAINCODE_PACKAGE":    6,
 	"PEER_SIGNATURE_TX":    10,
+	"EQUIVOCATION_PROOF":   11,
 }
 
 func (x HeaderType) String() string {
