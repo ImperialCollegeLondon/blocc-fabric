@@ -179,12 +179,22 @@ func getApprovedTransactions(vledger ledger.PeerLedger, chaincodeName []byte) pb
 	}
 
 	ccName := string(chaincodeName)
-	qscclogger.Debugf("BLOCC: start querying the BSCC agreements associated to chaincode %s", ccName)
+	qscclogger.Infof("BLOCC: Querying approved transactions for chaincode %s", ccName)
 
 	agreements := make(map[string]OutputEntry)
-	var blockNum uint64 = 0
 
-	for {
+	binfo, err := vledger.GetBlockchainInfo()
+	if err != nil {
+		errMsg := fmt.Sprintf("BLOCC: Failed to get chain info, error %s", err)
+		qscclogger.Error(errMsg)
+		return shim.Error(errMsg)
+	}
+
+	height := binfo.Height
+
+	for blockNum := uint64(0); blockNum < height; blockNum++ {
+		qscclogger.Debugf("BLOCC: checking block %d", blockNum)
+
 		block, err := vledger.GetBlockByNumber(blockNum)
 		if err != nil {
 			errMsg := fmt.Sprintf("BLOCC: Failed to get block number %d, error %s", blockNum, err)
@@ -210,6 +220,8 @@ func getApprovedTransactions(vledger ledger.PeerLedger, chaincodeName []byte) pb
 				continue
 			}
 
+			qscclogger.Debugf("BLOCC: Block %d is a BSCC block", blockNum)
+
 			mspId, approvedTxId, err := protoutil.ExtractApprovalInfo(data)
 			if err != nil {
 				errMsg := fmt.Sprintf("BLOCC: Failed to extract approval info, error %s", err)
@@ -227,7 +239,7 @@ func getApprovedTransactions(vledger ledger.PeerLedger, chaincodeName []byte) pb
 			// Record reading if the approved transaction is unseen
 			sensorTransaction, err := vledger.GetTransactionByID(approvedTxId)
 			if err != nil {
-				errMsg := fmt.Sprintf("BLOCC: Failed to get transaction by ID, error %s", err)
+				errMsg := fmt.Sprintf("BLOCC: Failed to get transaction by ID %s, error %s", approvedTxId, err)
 				qscclogger.Error(errMsg)
 				return shim.Error(errMsg)
 			}
@@ -238,6 +250,9 @@ func getApprovedTransactions(vledger ledger.PeerLedger, chaincodeName []byte) pb
 				qscclogger.Error(errMsg)
 				return shim.Error(errMsg)
 			}
+
+			qscclogger.Debugf("BLOCC: block %d, approvingMspId=%s, approvedTxId=%s, temperature=%d, relativeHumidity=%d, timestamp=%d",
+				blockNum, mspId, approvedTxId, temperature, relativeHumidity, timestamp)
 
 			agreements[approvedTxId] = OutputEntry{
 				TxID:            approvedTxId,
@@ -250,10 +265,10 @@ func getApprovedTransactions(vledger ledger.PeerLedger, chaincodeName []byte) pb
 			}
 		}
 
-		blockNum++
 	}
 
-	var result []OutputEntry
+	// Initialise to an empty array
+	result := make([]OutputEntry, 0)
 	for _, entry := range agreements {
 		result = append(result, entry)
 	}

@@ -1,7 +1,6 @@
 package protoutil
 
 import (
-	"encoding/base64"
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric-protos-go/common"
 	"github.com/hyperledger/fabric-protos-go/msp"
@@ -75,9 +74,9 @@ func ExtractApprovalInfo(envelopeBytes []byte) (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
-	approvedTxID := cis.ChaincodeSpec.Input.Args[1]
 
-	decodedApprovedTxID, err := base64.StdEncoding.DecodeString(string(approvedTxID))
+	approvedTxIdBytes := cis.ChaincodeSpec.Input.Args[1]
+	approvedTxID := string(approvedTxIdBytes)[2:]
 
 	mspId, err := ExtractMspIdFromEnvelope(envelopeBytes)
 
@@ -85,7 +84,7 @@ func ExtractApprovalInfo(envelopeBytes []byte) (string, string, error) {
 		return "", "", err
 	}
 
-	return mspId, string(decodedApprovedTxID), nil
+	return mspId, approvedTxID, nil
 }
 
 func IsBscc(envelopeBytes []byte) (bool, error) {
@@ -228,18 +227,9 @@ func ExtractTemperatureHumidityReadingFromEnvelope(envelope *common.Envelope) (f
 		return 0, 0, 0, err
 	}
 
-	temperatureBytes, err := base64.StdEncoding.DecodeString(string(ccInvocationSpec.ChaincodeSpec.Input.Args[1]))
-	if err != nil {
-		return 0, 0, 0, err
-	}
-	relativeHumidityBytes, err := base64.StdEncoding.DecodeString(string(ccInvocationSpec.ChaincodeSpec.Input.Args[2]))
-	if err != nil {
-		return 0, 0, 0, err
-	}
-	timestampBytes, err := base64.StdEncoding.DecodeString(string(ccInvocationSpec.ChaincodeSpec.Input.Args[3]))
-	if err != nil {
-		return 0, 0, 0, err
-	}
+	temperatureBytes := ccInvocationSpec.ChaincodeSpec.Input.Args[1]
+	relativeHumidityBytes := ccInvocationSpec.ChaincodeSpec.Input.Args[2]
+	timestampBytes := ccInvocationSpec.ChaincodeSpec.Input.Args[3]
 
 	temperature, err := strconv.ParseFloat(string(temperatureBytes), 64)
 	if err != nil {
