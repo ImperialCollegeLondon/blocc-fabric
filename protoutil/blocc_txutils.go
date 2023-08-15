@@ -93,13 +93,64 @@ func IsBscc(envelopeBytes []byte) (bool, error) {
 		return false, errors.New("envelopeBytes should not be nil")
 	}
 
-	cis, err := extractChaincodeInvocationSpec(envelopeBytes)
+	envelope, err := UnmarshalEnvelope(envelopeBytes)
 	if err != nil {
 		return false, err
 	}
-	chaincodeName := cis.ChaincodeSpec.ChaincodeId.Name
 
-	return chaincodeName == "bscc", nil
+	payload, err := UnmarshalPayload(envelope.GetPayload())
+	if err != nil {
+		return false, err
+	}
+
+	if payload.Header == nil || payload.Header.ChannelHeader == nil {
+		return false, errors.New("Payload header or channel header is missing")
+	}
+
+	channelHeader, err := UnmarshalChannelHeader(payload.Header.ChannelHeader)
+	if err != nil {
+		return false, errors.Wrap(err, "Failed to unmarshal channel header")
+	}
+
+	// Check if it's an endorsement transaction
+	if channelHeader.Type == int32(common.HeaderType_ENDORSER_TRANSACTION) {
+		tx, err := UnmarshalTransaction(payload.Data)
+		if err != nil {
+			return false, errors.Wrap(err, "Failed to unmarshal transaction")
+		}
+
+		// Check if the transaction is related to BSCC
+		for _, action := range tx.Actions {
+			ccAction, err := UnmarshalChaincodeActionPayload(action.Payload)
+			if err != nil {
+				return false, errors.Wrap(err, "Failed to unmarshal chaincode action payload")
+			}
+
+			if ccAction.Action == nil || ccAction.Action.ProposalResponsePayload == nil {
+				continue
+			}
+
+			proposalRespPayload, err := UnmarshalProposalResponsePayload(ccAction.Action.ProposalResponsePayload)
+			if err != nil {
+				return false, errors.Wrap(err, "Failed to unmarshal proposal response payload")
+			}
+
+			if proposalRespPayload.Extension == nil {
+				continue
+			}
+
+			respPayload, err := UnmarshalChaincodeAction(proposalRespPayload.Extension)
+			if err != nil {
+				return false, errors.Wrap(err, "Failed to unmarshal chaincode action")
+			}
+
+			if respPayload.ChaincodeId != nil && respPayload.ChaincodeId.Name == "bscc" {
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
 }
 
 func ExtractMspIdFromEnvelope(envelopeBytes []byte) (string, error) {
