@@ -1,10 +1,10 @@
 package protoutil
 
 import (
-	"encoding/base64"
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric-protos-go/msp"
 	"github.com/pkg/errors"
+	"strconv"
 
 	"github.com/hyperledger/fabric-protos-go/common"
 	"github.com/hyperledger/fabric-protos-go/peer"
@@ -55,16 +55,37 @@ func ExtractChaincodeInvocationSpec(envelopeBytes []byte) (*peer.ChaincodeInvoca
 	return cis, nil
 }
 
-func ExtractApprovalTxID(envelopeBytes []byte) (string, error) {
+// ExtractApprovalInfo returns the MSP ID of the peer and the TxID of
+// a sensor reading transaction that it approves with BSCC transaction
+func ExtractApprovalInfo(envelopeBytes []byte) (string, string, error) {
+	if envelopeBytes == nil {
+		return "", "", errors.New("envelopeBytes should not be nil")
+	}
+
+	isBscc, err := IsBscc(envelopeBytes)
+	if err != nil {
+		return "", "", err
+	}
+
+	if !isBscc {
+		return "", "", errors.New("The given transaction is not a BSCC transaction")
+	}
+
 	cis, err := ExtractChaincodeInvocationSpec(envelopeBytes)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	approvalTxID := cis.ChaincodeSpec.Input.Args[1]
 
-	decodedApprovalTxID, err := base64.StdEncoding.DecodeString(string(approvalTxID))
+	approvedTxIdBytes := cis.ChaincodeSpec.Input.Args[1]
+	approvedTxID := string(approvedTxIdBytes)[2:]
 
-	return string(decodedApprovalTxID), nil
+	mspId, err := ExtractMspIdFromEnvelope(envelopeBytes)
+
+	if err != nil {
+		return "", "", err
+	}
+
+	return mspId, approvedTxID, nil
 }
 
 func IsBscc(envelopeBytes []byte) (bool, error) {
@@ -104,4 +125,66 @@ func ExtractMspIdFromEnvelope(envelopeBytes []byte) (string, error) {
 
 	// Return the MspId
 	return serializedIdentity.Mspid, nil
+}
+
+// ExtractTemperatureHumidityReadingFromEnvelope retrieve the temperature, relative humidity, timestamp
+// from a TemperatureHumidityReadingContract transaction
+func ExtractTemperatureHumidityReadingFromEnvelope(envelope *common.Envelope) (float64, float64, int64, error) {
+	if envelope == nil {
+		return 0, 0, 0, errors.New("envelope should not be nil")
+	}
+
+	// Unmarshal the payload
+	payload, err := UnmarshalPayload(envelope.GetPayload())
+	if err != nil {
+		return 0, 0, 0, err
+	}
+
+	// Unmarshal the transaction
+	tx, err := UnmarshalTransaction(payload.Data)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+
+	// Assuming the transaction has at least one action
+	if len(tx.Actions) == 0 {
+		return 0, 0, 0, errors.New("no transaction actions found")
+	}
+
+	// Unmarshal the ChaincodeActionPayload
+	ccActionPayload, err := UnmarshalChaincodeActionPayload(tx.GetActions()[0].GetPayload())
+	if err != nil {
+		return 0, 0, 0, err
+	}
+
+	// Unmarshal the ChaincodeProposalPayload
+	ccProposalPayload, err := UnmarshalChaincodeProposalPayload(ccActionPayload.GetChaincodeProposalPayload())
+	if err != nil {
+		return 0, 0, 0, err
+	}
+
+	// Unmarshal and return the ChaincodeInvocationSpec
+	ccInvocationSpec, err := UnmarshalChaincodeInvocationSpec(ccProposalPayload.Input)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+
+	temperatureBytes := ccInvocationSpec.ChaincodeSpec.Input.Args[1]
+	relativeHumidityBytes := ccInvocationSpec.ChaincodeSpec.Input.Args[2]
+	timestampBytes := ccInvocationSpec.ChaincodeSpec.Input.Args[3]
+
+	temperature, err := strconv.ParseFloat(string(temperatureBytes), 64)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	relativeHumidity, err := strconv.ParseFloat(string(relativeHumidityBytes), 64)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	timestamp, err := strconv.ParseInt(string(timestampBytes), 10, 64)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+
+	return temperature, relativeHumidity, timestamp, nil
 }
