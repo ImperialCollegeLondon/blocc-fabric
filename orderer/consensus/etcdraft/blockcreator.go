@@ -7,9 +7,9 @@ SPDX-License-Identifier: Apache-2.0
 package etcdraft
 
 import (
-	"encoding/base64"
 	"github.com/golang/protobuf/proto"
 	cb "github.com/hyperledger/fabric-protos-go/common"
+	"github.com/hyperledger/fabric-protos-go/peer"
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/protoutil"
 )
@@ -24,24 +24,33 @@ type blockCreator struct {
 }
 
 func (bc *blockCreator) createNextBlock(envs []*cb.Envelope) *cb.Block {
-	bc.logger.Debugf("Creating next block for chain with height %d", bc.number)
 	data := &cb.BlockData{
 		Data: make([][]byte, len(envs)),
 	}
 
 	var err error
+	var specs *peer.ChaincodeInvocationSpec
+	shouldFork := false
 	for i, env := range envs {
 		data.Data[i], err = proto.Marshal(env)
 		if err != nil {
 			bc.logger.Panicf("Could not marshal envelope: %s", err)
 		}
+
+		specs, err = protoutil.ExtractChaincodeInvocationSpec(data.Data[i])
+		if err != nil {
+			bc.logger.Panicf("Could not extract chaincode invocation spec: %s", err)
+		}
+		bc.logger.Infof("specs: %s", specs)
+		if specs != nil && specs.ChaincodeSpec != nil {
+			funcName := specs.ChaincodeSpec.Input.Args[0]
+			if string(funcName) == "SimulateForkAttempt" {
+				shouldFork = true
+			}
+		}
 	}
 
-	//bc.number++
-
-	if bc.number == 15 {
-		bc.number = 15
-	} else {
+	if !shouldFork {
 		bc.number++
 	}
 
@@ -51,8 +60,5 @@ func (bc *blockCreator) createNextBlock(envs []*cb.Envelope) *cb.Block {
 
 	bc.hash = protoutil.BlockHeaderHash(block.Header)
 
-	bc.logger.Debug("Block header data hash: ", base64.StdEncoding.EncodeToString(block.Header.DataHash))
-	bc.logger.Debug("Block header previous hash: ", base64.StdEncoding.EncodeToString(block.Header.PreviousHash))
-	bc.logger.Debug("Block header hash: ", base64.StdEncoding.EncodeToString(bc.hash))
 	return block
 }

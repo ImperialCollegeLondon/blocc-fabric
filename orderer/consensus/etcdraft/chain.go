@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/pem"
 	"fmt"
+	"github.com/hyperledger/fabric-protos-go/peer"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -170,8 +171,9 @@ type Chain struct {
 	errorCLock sync.RWMutex
 	errorC     chan struct{} // returned by Errored()
 
-	forkCLock sync.RWMutex
-	forkC     chan struct{} // returned by Forked()
+	forkCLock     sync.RWMutex
+	forkCloseOnce sync.Once
+	forkC         chan struct{} // returned by Forked()
 
 	raftMetadataLock     sync.RWMutex
 	confChangeInProgress *raftpb.ConfChange
@@ -900,37 +902,11 @@ func (c *Chain) run() {
 func (c *Chain) writeBlock(block *common.Block, index uint64) {
 	isForkAttempt := c.isPossibleFork(block)
 	if isForkAttempt {
-		// Log was is inside c.forkC
-		select {
-		case _, ok := <-c.forkC:
-			if !ok {
-				c.logger.Debug("Fork channel is closed")
-			} else {
-				c.logger.Debug("Fork channel is open and contains data")
-			}
-		default:
-			c.logger.Debug("Fork channel is open but does not contain data")
-		}
+		c.forkCloseOnce.Do(func() {
+			close(c.forkC)
+		})
 
-		c.logger.Debug("WriteBlock Fork address:", c.forkC)
-		c.logger.Debug("Sending fork event")
-		c.forkCLock.Lock()
-		c.logger.Debug("Locking fork channel")
-		c.forkC <- struct{}{}
-		c.logger.Debug("Unlocking fork channel")
-		c.forkCLock.Unlock()
-		c.logger.Debug("Fork event sent")
-
-		select {
-		case _, ok := <-c.forkC:
-			if !ok {
-				c.logger.Debug("Fork channel is closed")
-			} else {
-				c.logger.Debug("Fork channel is open and contains data")
-			}
-		default:
-			c.logger.Debug("Fork channel is open but does not contain data")
-		}
+		// TODO: the forked block can be retrieved here
 	}
 
 	if block.Header.Number > c.lastBlock.Header.Number+1 {
@@ -959,10 +935,43 @@ func (c *Chain) writeBlock(block *common.Block, index uint64) {
 
 	c.support.WriteBlock(block, m)
 
-	c.logger.Debug("Chain is:", c.channelID)
-	c.logger.Debug("Active nodes are:", c.ActiveNodes)
-	c.logger.Debug("Node is:", c.Node)
-	c.logger.Debug("Is chain running:", c.isRunning())
+	if isForkAttempt {
+		c.Halt()
+	}
+}
+
+func (c *Chain) markAsFork(block *common.Block) error {
+	// Extract chaincode ID from the block and for every transaction change chaincode ID to "fork"
+	for _, d := range block.Data.Data {
+		env, err := protoutil.GetEnvelopeFromBlock(d)
+		if err != nil {
+			return fmt.Errorf("error extracting envelope from block: %w", err)
+		}
+		payload, err := protoutil.UnmarshalPayload(env.Payload)
+		if err != nil {
+			return fmt.Errorf("error extracting payload from envelope: %w", err)
+		}
+		tx, err := protoutil.UnmarshalTransaction(payload.Data)
+		if err != nil {
+			return fmt.Errorf("error extracting transaction from payload: %w", err)
+		}
+		CAP, err := protoutil.UnmarshalChaincodeActionPayload(tx.Actions[0].Payload)
+		if err != nil {
+			return fmt.Errorf("error extracting chaincode action payload from transaction: %w", err)
+		}
+		cpp, err := protoutil.UnmarshalChaincodeProposalPayload(CAP.ChaincodeProposalPayload)
+		if err != nil {
+			return fmt.Errorf("error extracting chaincode proposal payload from chaincode action payload: %w", err)
+		}
+		// ChaincodeInvocationSpec
+		cis := &peer.ChaincodeInvocationSpec{}
+		err = proto.Unmarshal(cpp.Input, cis)
+		if err != nil {
+			return fmt.Errorf("could not unmarshal chaincode invocation spec: %w", err)
+		}
+		cis.ChaincodeSpec.ChaincodeId.Name = "FORK"
+	}
+	return nil
 }
 
 // Orders the envelope in the `msg` content. SubmitRequest.
@@ -1693,59 +1702,3 @@ func (c *Chain) isPossibleFork(incomingBlock *common.Block) bool {
 	c.logger.Infof("No fork attempt detected.")
 	return false
 }
-
-//func (c *Chain) updateHeaderToEquivocationType(incomingBlock *common.Block) error {
-//	// Update the header
-//	envelope, err := protoutil.ExtractEnvelope(incomingBlock, 0)
-//	if err != nil {
-//		return err
-//	}
-//	hdr, err := protoutil.ChannelHeader(envelope)
-//	if err != nil {
-//		return err
-//	}
-//	hdr.Type = int32(common.HeaderType_EQUIVOCATION_PROOF)
-//
-//	// Re-serialize the block
-//
-//	return nil
-//}
-//
-//func (c *Chain) updateHeaderToEquivocationType(incomingBlock *common.Block) error {
-//	// Unmarshal the block's data to a Payload
-//	payload := &common.Payload{}
-//	err := proto.Unmarshal(incomingBlock.Data.Data, payload)
-//	if err != nil {
-//		return err
-//	}
-//
-//	// Unmarshal the payload's header to a ChannelHeader
-//	channelHeader := &common.ChannelHeader{}
-//	err = proto.Unmarshal(payload.Header.ChannelHeader, channelHeader)
-//	if err != nil {
-//		return err
-//	}
-//
-//	// Update the header type to EQUIVOCATION_PROOF
-//	channelHeader.Type = int32(common.HeaderType_EQUIVOCATION_PROOF)
-//
-//	// Marshal the ChannelHeader back to bytes
-//	channelHeaderBytes, err := proto.Marshal(channelHeader)
-//	if err != nil {
-//		return err
-//	}
-//
-//	// Update the payload's ChannelHeader
-//	payload.Header.ChannelHeader = channelHeaderBytes
-//
-//	// Marshal the Payload back to bytes
-//	payloadBytes, err := proto.Marshal(payload)
-//	if err != nil {
-//		return err
-//	}
-//
-//	// Update the block's data
-//	incomingBlock.Data.Data = payloadBytes
-//
-//	return nil
-//}

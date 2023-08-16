@@ -37,7 +37,7 @@ func (*Chain) Errored() <-chan struct{} {
 }
 
 func (c *Chain) Forked() <-chan struct{} {
-	closedForkedChannel := make(chan struct{})
+	closedForkedChannel := make(chan struct{}, 1)
 	close(closedForkedChannel)
 	return closedForkedChannel
 }

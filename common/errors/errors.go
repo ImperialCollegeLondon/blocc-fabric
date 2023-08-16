@@ -54,3 +54,14 @@ func (e VSCCExecutionFailureError) Error() string {
 func (e *VSCCExecutionFailureError) IsValid() bool {
 	return e.Err == nil
 }
+
+// ForkedTxError indicates that a transaction
+// has been forged and is attempting to be submitted
+// to the network
+type ForkedTxError struct {
+	msg string
+}
+
+func (e *ForkedTxError) Error() string {
+	return e.msg
+}

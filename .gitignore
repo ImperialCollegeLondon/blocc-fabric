@@ -26,3 +26,6 @@ TESTS*.xml
 .vagrant/
 .vscode
 integration/*
+new_config.txt
+new_config_2.0.txt
+old_config.txt

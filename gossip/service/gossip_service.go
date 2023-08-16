@@ -160,6 +160,15 @@ type GossipServiceAdapter interface {
 
 	// Gossip the message across the peers
 	Gossip(msg *gproto.GossipMessage)
+
+	// StopChain stops gossip for a specified chain
+	StopChain(chainID string)
+
+	// LeaveChan makes the Gossip instance leave a channel.
+	// It still disseminates stateInfo message, but doesn't participate
+	// in block pulling anymore, and can't return anymore a list of peers
+	// in the channel.
+	LeaveChan(channelID common.ChannelID)
 }
 
 // DeliveryServiceFactory factory to create and initialize delivery service instance
@@ -524,6 +533,24 @@ func (g *GossipService) Stop() {
 		}
 	}
 	g.gossipSvc.Stop()
+}
+
+// StopChain stops the gossip component for a given chain
+func (g *GossipService) StopChain(chainID string) {
+	g.lock.Lock()
+	defer g.lock.Unlock()
+
+	logger.Info("Stopping chain", chainID)
+	if le, exists := g.leaderElection[chainID]; exists {
+		logger.Infof("Stopping leader election for %s", chainID)
+		le.Stop()
+	}
+	g.chains[chainID].Stop()
+	g.privateHandlers[chainID].close()
+
+	if g.deliveryService[chainID] != nil {
+		g.deliveryService[chainID].Stop()
+	}
 }
 
 func (g *GossipService) newLeaderElectionComponent(channelID string, callback func(bool),

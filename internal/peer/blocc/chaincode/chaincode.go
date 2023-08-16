@@ -15,8 +15,9 @@ import (
 )
 
 const (
-	bloccName       = "bscc"
-	approveFuncName = "ApproveSensoryReading"
+	bloccName        = "bscc"
+	approveFuncName  = "ApproveSensoryReading"
+	simulateFuncName = "SimulateForkAttempt"
 )
 
 var logger = flogging.MustGetLogger("cli.blocc.chaincode")
@@ -24,6 +25,7 @@ var logger = flogging.MustGetLogger("cli.blocc.chaincode")
 // Cmd returns the cobra command for Chaincode
 func Cmd(cryptoProvider bccsp.BCCSP) *cobra.Command {
 	chaincodeCmd.AddCommand(ApproveForThisPeerCmd(nil, cryptoProvider))
+	chaincodeCmd.AddCommand(SimulateForkAttemptCmd(nil, cryptoProvider))
 
 	logger.Debugf("bloccCmd: %v", chaincodeCmd)
 

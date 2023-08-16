@@ -96,6 +96,9 @@ type GossipChannel interface {
 	// LeaveChannel makes the peer leave the channel
 	LeaveChannel()
 
+	// HasLeftChannel returns whether the peer has left the channel
+	HasLeftChannel() bool
+
 	// Stop stops the channel's activity
 	Stop()
 }
@@ -359,6 +362,10 @@ func (gc *gossipChannel) LeaveChannel() {
 }
 
 func (gc *gossipChannel) hasLeftChannel() bool {
+	return atomic.LoadInt32(&gc.leftChannel) == 1
+}
+
+func (gc *gossipChannel) HasLeftChannel() bool {
 	return atomic.LoadInt32(&gc.leftChannel) == 1
 }
 

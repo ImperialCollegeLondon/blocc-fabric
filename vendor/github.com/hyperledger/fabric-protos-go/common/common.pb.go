@@ -127,6 +127,7 @@ const (
 	BlockMetadataIndex_TRANSACTIONS_FILTER BlockMetadataIndex = 2
 	BlockMetadataIndex_ORDERER             BlockMetadataIndex = 3 // Deprecated: Do not use.
 	BlockMetadataIndex_COMMIT_HASH         BlockMetadataIndex = 4
+	BlockMetadataIndex_VALIDATION          BlockMetadataIndex = 5 // BLOCC Protocol (Forks Indicator)
 )
 
 var BlockMetadataIndex_name = map[int32]string{
@@ -135,6 +136,7 @@ var BlockMetadataIndex_name = map[int32]string{
 	2: "TRANSACTIONS_FILTER",
 	3: "ORDERER",
 	4: "COMMIT_HASH",
+	5: "VALIDATION",
 }
 
 var BlockMetadataIndex_value = map[string]int32{
@@ -143,6 +145,7 @@ var BlockMetadataIndex_value = map[string]int32{
 	"TRANSACTIONS_FILTER": 2,
 	"ORDERER":             3,
 	"COMMIT_HASH":         4,
+	"VALIDATION":          5,
 }
 
 func (x BlockMetadataIndex) String() string {

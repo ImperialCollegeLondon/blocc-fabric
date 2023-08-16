@@ -211,6 +211,7 @@ func IsConfigBlock(block *cb.Block) bool {
 }
 
 // IsForkBlock validates whenever given block contains fork proof
+// BLOCC: Not used for now
 func IsForkBlock(block *cb.Block) bool {
 	envelope, err := ExtractEnvelope(block, 0)
 	if err != nil {

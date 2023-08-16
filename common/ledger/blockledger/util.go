@@ -46,8 +46,6 @@ func (nfei *NotFoundErrorIterator) Close() {}
 //
 //	to accommodate non-deterministic marshaling
 func CreateNextBlock(rl Reader, messages []*cb.Envelope) *cb.Block {
-	logger.Debugf("Creating next block for chain with height %d", rl.Height())
-
 	var nextBlockNumber uint64
 	var previousBlockHash []byte
 	var err error

@@ -10,10 +10,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/hyperledger/fabric/gossip/common"
 	"sync"
 	"time"
 
 	"github.com/hyperledger/fabric-protos-go/orderer"
+	errors2 "github.com/hyperledger/fabric/common/errors"
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/common/util"
 	"github.com/hyperledger/fabric/internal/pkg/comm"
@@ -139,6 +141,7 @@ func (d *deliverServiceImpl) StartDeliverForChannel(chainID string, ledgerInfo b
 		BlockGossipDisabled: !d.conf.DeliverServiceConfig.BlockGossipEnabled,
 		InitialRetryDelay:   100 * time.Millisecond,
 		YieldLeadership:     !d.conf.IsStaticLeader,
+		ErrorC:              make(chan error, 1),
 	}
 
 	if dc.BlockGossipDisabled {
@@ -158,6 +161,26 @@ func (d *deliverServiceImpl) StartDeliverForChannel(chainID string, ledgerInfo b
 	d.blockProviders[chainID] = dc
 	go func() {
 		dc.DeliverBlocks()
+		select {
+		case err := <-dc.ErrorC:
+			if _, ok := err.(*errors2.ForkedTxError); ok {
+				// If a fork is detected, stop the delivery for the channel
+				logger.Errorf("Fork occurred for channel %s. "+
+					"All subsequent blocks may be compromised.", chainID, err)
+				err = d.StopDeliverForChannel(chainID)
+				if err != nil {
+					logger.Errorf("Fork occurred but Fabric failed to stop delivery for channel %s: %s. "+
+						"All subsequent blocks may be compromised.", chainID, err)
+				}
+				dc.Gossip.StopChain(chainID)
+				dc.Gossip.LeaveChan(common.ChannelID(chainID))
+			} else {
+				// Log or handle other types of errors
+				logger.Errorf("Received unexpected error from DeliverBlocks: %v", err)
+			}
+		default:
+			// No error, continue as normal
+		}
 		finalizer()
 	}()
 	return nil

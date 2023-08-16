@@ -50,7 +50,7 @@ func newChain(support consensus.ConsenterSupport) *chain {
 		support:  support,
 		sendChan: make(chan *message),
 		exitChan: make(chan struct{}),
-		forkChan: make(chan struct{}),
+		forkChan: make(chan struct{}, 1),
 	}
 }
 

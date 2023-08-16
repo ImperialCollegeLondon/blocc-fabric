@@ -232,21 +232,9 @@ func (h *Handler) deliverBlocks(ctx context.Context, srv *Server, envelope *cb.E
 	}
 
 	forkedChan := chain.Forked()
-	logger.Debug("Fork address:", forkedChan)
-	select {
-	case _, ok := <-forkedChan:
-		if !ok {
-			logger.Debug("Fork channel is closed")
-		} else {
-			logger.Debug("Fork channel is open and contains data")
-		}
-	default:
-		logger.Debug("Fork channel is open but does not contain data")
-	}
-	logger.Debugf("[channel: %s] Checking if channel is forked", chdr.ChannelId)
 	select {
 	case <-forkedChan:
-		logger.Warningf("[channel: %s] Rejecting deliver request for %s because of chain fork", chdr.ChannelId, addr)
+		logger.Warningf("[channel: %s] Rejecting deliver request for %s because of fork", chdr.ChannelId, addr)
 		return cb.Status_FORKED, nil
 	default:
 	}
@@ -327,6 +315,9 @@ func (h *Handler) deliverBlocks(ctx context.Context, srv *Server, envelope *cb.E
 		case <-ctx.Done():
 			logger.Debugf("Context canceled, aborting wait for next block")
 			return cb.Status_INTERNAL_SERVER_ERROR, errors.Wrapf(ctx.Err(), "context finished before block retrieved")
+		case <-forkedChan:
+			logger.Warningf("[channel: %s] Aborting deliver request for %s because of fork", chdr.ChannelId, addr)
+			return cb.Status_FORKED, nil
 		case <-erroredChan:
 			// TODO, today, the only user of the errorChan is the orderer consensus implementations.  If the peer ever reports
 			// this error, we will need to update this error message, possibly finding a way to signal what error text to return.

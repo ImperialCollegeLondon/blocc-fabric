@@ -239,12 +239,16 @@ func (g *Node) JoinChan(joinMsg api.JoinChannelMessage, channelID common.Channel
 
 // LeaveChan makes gossip stop participating in the given channel
 func (g *Node) LeaveChan(channelID common.ChannelID) {
+	g.logger.Info("Leaving gossip network of channel", channelID)
 	gc := g.chanState.getGossipChannelByChainID(channelID)
 	if gc == nil {
 		g.logger.Debug("No such channel", channelID)
 		return
 	}
 	gc.LeaveChannel()
+
+	left := gc.HasLeftChannel()
+	g.logger.Debug("Has left channel", channelID, "?", left)
 }
 
 // SuspectPeers makes the gossip instance validate identities of suspected peers, and close

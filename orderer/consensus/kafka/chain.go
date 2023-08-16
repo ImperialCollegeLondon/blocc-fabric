@@ -133,7 +133,7 @@ func (chain *chainImpl) Forked() <-chan struct{} {
 	default:
 		// While the consenter is starting, return empty channel because
 		// the chain is not forked yet.
-		return make(chan struct{})
+		return make(chan struct{}, 1)
 	}
 }
 
