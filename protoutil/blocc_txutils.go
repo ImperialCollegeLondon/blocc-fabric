@@ -1,13 +1,18 @@
+/*
+BLOCC Project
+SPDX-License-Identifier: Apache-2.0
+*/
+
 package protoutil
 
 import (
-	"github.com/golang/protobuf/proto"
-	"github.com/hyperledger/fabric-protos-go/msp"
-	"github.com/pkg/errors"
 	"strconv"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric-protos-go/common"
+	"github.com/hyperledger/fabric-protos-go/msp"
 	"github.com/hyperledger/fabric-protos-go/peer"
+	"github.com/pkg/errors"
 )
 
 func ExtractChaincodeInvocationSpec(envelopeBytes []byte) (*peer.ChaincodeInvocationSpec, error) {
@@ -80,7 +85,6 @@ func ExtractApprovalInfo(envelopeBytes []byte) (string, string, error) {
 	approvedTxID := string(approvedTxIdBytes)[2:]
 
 	mspId, err := ExtractMspIdFromEnvelope(envelopeBytes)
-
 	if err != nil {
 		return "", "", err
 	}

@@ -52,6 +52,8 @@ type Chain interface {
 
 	// Forked returns a channel which closes when the backing consenter has forked
 	Forked() <-chan struct{}
+
+	ForkedBlock() <-chan *cb.Block
 }
 
 //go:generate counterfeiter -o mock/policy_checker.go -fake-name PolicyChecker . PolicyChecker
@@ -317,6 +319,15 @@ func (h *Handler) deliverBlocks(ctx context.Context, srv *Server, envelope *cb.E
 			return cb.Status_INTERNAL_SERVER_ERROR, errors.Wrapf(ctx.Err(), "context finished before block retrieved")
 		case <-forkedChan:
 			logger.Warningf("[channel: %s] Aborting deliver request for %s because of fork", chdr.ChannelId, addr)
+
+			// TODO: temporarily disabled until figuring out how to send the blocc to the peer from the orderer, i.e. GRPC above
+			//forkedBlock := <-chain.ForkedBlock()
+			//if forkedBlock == nil {
+			//	logger.Warningf("[channel: %s] Aborting deliver request for %s because of fork, but no forked block found", chdr.ChannelId, addr)
+			//} else {
+			//	logger.Debugf("Channel %s forked at block %d", chdr.ChannelId, forkedBlock.String())
+			//}
+
 			return cb.Status_FORKED, nil
 		case <-erroredChan:
 			// TODO, today, the only user of the errorChan is the orderer consensus implementations.  If the peer ever reports
