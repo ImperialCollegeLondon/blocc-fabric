@@ -162,6 +162,10 @@ func (c *Channel) Forked() <-chan struct{} {
 	return nil
 }
 
+func (c *Channel) ForkedBlock() <-chan *common.Block {
+	return nil
+}
+
 func capabilitiesSupportedOrPanic(res channelconfig.Resources) {
 	ac, ok := res.ApplicationConfig()
 	if !ok {

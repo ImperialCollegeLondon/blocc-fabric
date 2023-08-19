@@ -11,16 +11,17 @@ import (
 	"context"
 	"encoding/pem"
 	"fmt"
-	"github.com/hyperledger/fabric-protos-go/peer"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"code.cloudfoundry.org/clock"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric-protos-go/common"
 	"github.com/hyperledger/fabric-protos-go/orderer"
 	"github.com/hyperledger/fabric-protos-go/orderer/etcdraft"
+	"github.com/hyperledger/fabric-protos-go/peer"
 	"github.com/hyperledger/fabric/bccsp"
 	"github.com/hyperledger/fabric/common/channelconfig"
 	"github.com/hyperledger/fabric/common/configtx"
@@ -175,6 +176,9 @@ type Chain struct {
 	forkCloseOnce sync.Once
 	forkC         chan struct{} // returned by Forked()
 
+	forkBlockCLock sync.RWMutex
+	forkBlockC     chan *common.Block
+
 	raftMetadataLock     sync.RWMutex
 	confChangeInProgress *raftpb.ConfChange
 	justElected          bool // this is true when node has just been elected
@@ -276,6 +280,7 @@ func NewChain(
 		snapC:             make(chan *raftpb.Snapshot),
 		errorC:            make(chan struct{}),
 		forkC:             make(chan struct{}),
+		forkBlockC:        make(chan *common.Block, 1),
 		gcC:               make(chan *gc),
 		observeC:          observeC,
 		support:           support,
@@ -378,7 +383,6 @@ func (c *Chain) Start() {
 
 	close(c.startC)
 	close(c.errorC)
-	close(c.forkC)
 
 	go c.gc()
 	go c.run()
@@ -441,7 +445,14 @@ func (c *Chain) Errored() <-chan struct{} {
 func (c *Chain) Forked() <-chan struct{} {
 	c.forkCLock.RLock()
 	defer c.forkCLock.RUnlock()
+
 	return c.forkC
+}
+
+func (c *Chain) ForkedBlock() <-chan *common.Block {
+	c.forkBlockCLock.RLock()
+	defer c.forkBlockCLock.RUnlock()
+	return c.forkBlockC
 }
 
 // Halt stops the chain.
@@ -786,6 +797,10 @@ func (c *Chain) run() {
 					c.forkCLock.Lock()
 					c.forkC = make(chan struct{})
 					c.forkCLock.Unlock()
+
+					c.forkBlockCLock.Lock()
+					c.forkBlockC = make(chan *common.Block, 1)
+					c.forkBlockCLock.Unlock()
 				}
 
 				if isCandidate(app.soft.RaftState) || newLeader == raft.None {
@@ -887,9 +902,9 @@ func (c *Chain) run() {
 			select {
 			case <-c.errorC: // avoid closing closed channel
 			case <-c.forkC: // avoid closing closed channel
+			case <-c.forkBlockC: // avoid closing closed channel
 			default:
 				close(c.errorC)
-				close(c.forkC)
 			}
 
 			c.logger.Infof("Stop serving requests")
@@ -904,9 +919,11 @@ func (c *Chain) writeBlock(block *common.Block, index uint64) {
 	if isForkAttempt {
 		c.forkCloseOnce.Do(func() {
 			close(c.forkC)
-		})
 
-		// TODO: the forked block can be retrieved here
+			// TODO: disabled for now; this sends the forked block to the peer for storage and display
+			// 	the problem is that one peer will block because of no messages, the other will keep receiving
+			// c.forkBlockC <- block
+		})
 	}
 
 	if block.Header.Number > c.lastBlock.Header.Number+1 {
@@ -1266,7 +1283,7 @@ func (c *Chain) apply(ents []raftpb.Entry) {
 		}
 	}
 
-	// at postion==0, ents[position].Type is ambiguous, it can be either of {raftpb.EntryNormal, raftpb.EntryConfChange}
+	// at position==0, ents[position].Type is ambiguous, it can be either of {raftpb.EntryNormal, raftpb.EntryConfChange}
 	// take a snapshot only for ents[position].Type == raftpb.EntryNormal
 	if c.accDataSize >= c.sizeLimit && ents[position].Type == raftpb.EntryNormal && len(ents[position].Data) > 0 {
 		b := protoutil.UnmarshalBlockOrPanic(ents[position].Data)
@@ -1688,6 +1705,7 @@ func (c *Chain) isPossibleFork(incomingBlock *common.Block) bool {
 		block := puller.PullBlock(incomingBlockNumber)
 		if block == nil {
 			c.logger.Errorf("Error pulling block %d from %s", incomingBlockNumber, mostUpToDateEndpoint)
+			return false
 		}
 		// Check if the block hash of the incoming block is the same as the block hash of the most up-to-date orderer
 		// for the same block number.

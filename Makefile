@@ -104,6 +104,7 @@ include gotools.mk
 
 .PHONY: all
 all: check-go-version native docker checks
+#all: check-go-version checks
 
 .PHONY: checks
 checks: basic-checks

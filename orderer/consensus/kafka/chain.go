@@ -111,7 +111,8 @@ type chainImpl struct {
 	// this an open, unbuffered channel.
 	errorChan chan struct{}
 	// Forked channel is closed when the chain is forked.
-	forkedChan chan struct{}
+	forkedChan      chan struct{}
+	forkedBlockChan chan *cb.Block
 	// When a Halt() request comes, close the channel. Unlike errorChan, this
 	// channel never re-opens when closed. Its closing triggers the exit of the
 	// processMessagesToBlock loop.
@@ -133,7 +134,18 @@ func (chain *chainImpl) Forked() <-chan struct{} {
 	default:
 		// While the consenter is starting, return empty channel because
 		// the chain is not forked yet.
-		return make(chan struct{}, 1)
+		return make(chan struct{})
+	}
+}
+
+func (chain *chainImpl) ForkedBlock() <-chan *cb.Block {
+	select {
+	case <-chain.startChan:
+		return chain.forkedBlockChan
+	default:
+		// While the consenter is starting, return empty channel because
+		// the chain is not forked yet.
+		return make(chan *cb.Block, 1)
 	}
 }
 

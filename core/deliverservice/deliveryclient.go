@@ -10,7 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/hyperledger/fabric/gossip/common"
+	"os"
 	"sync"
 	"time"
 
@@ -18,6 +18,7 @@ import (
 	errors2 "github.com/hyperledger/fabric/common/errors"
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/common/util"
+	"github.com/hyperledger/fabric/gossip/common"
 	"github.com/hyperledger/fabric/internal/pkg/comm"
 	"github.com/hyperledger/fabric/internal/pkg/identity"
 	"github.com/hyperledger/fabric/internal/pkg/peer/blocksprovider"
@@ -166,7 +167,12 @@ func (d *deliverServiceImpl) StartDeliverForChannel(chainID string, ledgerInfo b
 			if _, ok := err.(*errors2.ForkedTxError); ok {
 				// If a fork is detected, stop the delivery for the channel
 				logger.Errorf("Fork occurred for channel %s. "+
-					"All subsequent blocks may be compromised.", chainID, err)
+					"All subsequent blocks may be compromised.", chainID)
+				// If a fork is detected, write the fork information to storage
+				writeErr := writeForkInfoToFile(chainID)
+				if writeErr != nil {
+					logger.Errorf("Failed to write fork information: %s", writeErr)
+				}
 				err = d.StopDeliverForChannel(chainID)
 				if err != nil {
 					logger.Errorf("Fork occurred but Fabric failed to stop delivery for channel %s: %s. "+
@@ -184,6 +190,23 @@ func (d *deliverServiceImpl) StartDeliverForChannel(chainID string, ledgerInfo b
 		finalizer()
 	}()
 	return nil
+}
+
+func writeForkInfoToFile(channelID string) error {
+	filename := fmt.Sprintf("/var/hyperledger/production/ledgersData/chains/chains/%s/fork_info.txt", channelID)
+
+	// Open the file for writing
+	file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	// Write the fork information to the file
+	// For now, just writing a simple message.
+	// TODO: write the entire block or other details.
+	_, err = file.WriteString(fmt.Sprintf("Fork detected for channel %s", channelID))
+	return err
 }
 
 // StopDeliverForChannel stops blocks delivery for channel by stopping channel block provider

@@ -1,7 +1,16 @@
+/*
+BLOCC Project
+SPDX-License-Identifier: Apache-2.0
+*/
+
 package bscc
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"os"
+
 	"github.com/hyperledger/fabric-chaincode-go/shim"
 	pb "github.com/hyperledger/fabric-protos-go/peer"
 	"github.com/hyperledger/fabric/bccsp"
@@ -11,8 +20,6 @@ import (
 	blocc "github.com/hyperledger/fabric/internal/peer/blocc/chaincode"
 	"github.com/hyperledger/fabric/protoutil"
 	"github.com/pkg/errors"
-	"io/ioutil"
-	"os"
 )
 
 func New(peerInstance *peer.Peer) *BSCC {
@@ -45,6 +52,7 @@ var bloccProtoLogger = flogging.MustGetLogger("bscc")
 const (
 	approveSensoryReading string = "ApproveSensoryReading"
 	simulateForkAttempt   string = "SimulateForkAttempt"
+	checkForkStatus       string = "CheckForkStatus"
 )
 
 // ------------------- Error handling ------------------- //
@@ -120,6 +128,9 @@ func (bscc *BSCC) Invoke(stub shim.ChaincodeStubInterface) pb.Response {
 	case simulateForkAttempt:
 		bloccProtoLogger.Warningf("Adding a fork block!")
 		return shim.Success(nil)
+	case checkForkStatus:
+		bloccProtoLogger.Infof("Checking fork status")
+		return bscc.CheckForkStatus(string(args[1]))
 	}
 
 	return shim.Error(fmt.Sprintf("Requested function %s not found.", fname))
@@ -207,4 +218,32 @@ func (bscc *BSCC) approveSensoryReading(address, rootCertFilePath string, event 
 	approveForThisPeerCmd.ResetFlags()
 
 	return err
+}
+
+func (bscc *BSCC) CheckForkStatus(channelID string) pb.Response {
+	if channelID == "" {
+		return shim.Error("ChannelID not specified")
+	}
+
+	var err error
+	var isForked bool
+
+	// Define the filename based on the channel ID
+	filename := fmt.Sprintf("/var/hyperledger/production/ledgersData/chains/chains/%s/fork_info.txt", channelID)
+
+	// Check if the file exists
+	if _, err = os.Stat(filename); os.IsNotExist(err) {
+		isForked = false
+	} else {
+		isForked = true
+	}
+
+	jsonResponse, err := json.Marshal(isForked)
+	if err != nil {
+		errMsg := fmt.Sprintf("BLOCC: Failed to marshal the result to JSON, error %s", err)
+		bloccProtoLogger.Error(errMsg)
+		return shim.Error(errMsg)
+	}
+
+	return shim.Success(jsonResponse)
 }

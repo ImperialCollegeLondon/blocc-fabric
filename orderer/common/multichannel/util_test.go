@@ -27,6 +27,16 @@ type mockChainCluster struct {
 	*mockChain
 }
 
+func (c *mockChainCluster) Forked() <-chan struct{} {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (c *mockChainCluster) ForkedBlock() <-chan *cb.Block {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (c *mockChainCluster) StatusReport() (types.ConsensusRelation, types.Status) {
 	return types.ConsensusRelationConsenter, types.StatusActive
 }
@@ -37,6 +47,16 @@ type mockChain struct {
 	support  consensus.ConsenterSupport
 	metadata *cb.Metadata
 	done     chan struct{}
+}
+
+func (mch *mockChain) Forked() <-chan struct{} {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (mch *mockChain) ForkedBlock() <-chan *cb.Block {
+	// TODO implement me
+	panic("implement me")
 }
 
 func (mch *mockChain) Errored() <-chan struct{} {

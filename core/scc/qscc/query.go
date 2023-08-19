@@ -9,7 +9,6 @@ package qscc
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/hyperledger/fabric/protoutil"
 	"strconv"
 
 	"github.com/hyperledger/fabric-chaincode-go/shim"
@@ -17,6 +16,7 @@ import (
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/core/aclmgmt"
 	"github.com/hyperledger/fabric/core/ledger"
+	"github.com/hyperledger/fabric/protoutil"
 )
 
 // LedgerGetter gets the PeerLedger associated with a channel.
@@ -251,7 +251,7 @@ func getApprovedTransactions(vledger ledger.PeerLedger, chaincodeName []byte) pb
 				return shim.Error(errMsg)
 			}
 
-			qscclogger.Debugf("BLOCC: block %d, approvingMspId=%s, approvedTxId=%s, temperature=%d, relativeHumidity=%d, timestamp=%d",
+			qscclogger.Debugf("BLOCC: block %d, approvingMspId=%s, approvedTxId=%s, temperature=%f, relativeHumidity=%f, timestamp=%d",
 				blockNum, mspId, approvedTxId, temperature, relativeHumidity, timestamp)
 
 			agreements[approvedTxId] = OutputEntry{
@@ -281,7 +281,6 @@ func getApprovedTransactions(vledger ledger.PeerLedger, chaincodeName []byte) pb
 	}
 
 	return shim.Success(jsonResponse)
-
 }
 
 func getTransactionByID(vledger ledger.PeerLedger, tid []byte) pb.Response {

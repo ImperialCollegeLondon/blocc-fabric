@@ -2,6 +2,7 @@
 package fake
 
 import (
+	"github.com/hyperledger/fabric/gossip/common"
 	"sync"
 
 	"github.com/hyperledger/fabric-protos-go/gossip"
@@ -28,6 +29,16 @@ type GossipServiceAdapter struct {
 	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
+}
+
+func (fake *GossipServiceAdapter) StopChain(chainID string) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (fake *GossipServiceAdapter) LeaveChan(channelID common.ChannelID) {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (fake *GossipServiceAdapter) AddPayload(arg1 string, arg2 *gossip.Payload) error {

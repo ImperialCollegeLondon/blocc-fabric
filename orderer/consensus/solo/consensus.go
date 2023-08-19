@@ -20,10 +20,11 @@ var logger = flogging.MustGetLogger("orderer.consensus.solo")
 type consenter struct{}
 
 type chain struct {
-	support  consensus.ConsenterSupport
-	sendChan chan *message
-	exitChan chan struct{}
-	forkChan chan struct{}
+	support       consensus.ConsenterSupport
+	sendChan      chan *message
+	exitChan      chan struct{}
+	forkChan      chan struct{}
+	forkBlockChan chan *cb.Block
 }
 
 type message struct {
@@ -47,10 +48,11 @@ func (solo *consenter) HandleChain(support consensus.ConsenterSupport, metadata 
 
 func newChain(support consensus.ConsenterSupport) *chain {
 	return &chain{
-		support:  support,
-		sendChan: make(chan *message),
-		exitChan: make(chan struct{}),
-		forkChan: make(chan struct{}, 1),
+		support:       support,
+		sendChan:      make(chan *message),
+		exitChan:      make(chan struct{}),
+		forkChan:      make(chan struct{}),
+		forkBlockChan: make(chan *cb.Block, 1),
 	}
 }
 
@@ -104,6 +106,10 @@ func (ch *chain) Errored() <-chan struct{} {
 
 func (ch *chain) Forked() <-chan struct{} {
 	return ch.forkChan
+}
+
+func (ch *chain) ForkedBlock() <-chan *cb.Block {
+	return ch.forkBlockChan
 }
 
 func (ch *chain) main() {

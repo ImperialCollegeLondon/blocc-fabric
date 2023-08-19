@@ -1,8 +1,15 @@
+/*
+BLOCC Project
+SPDX-License-Identifier: Apache-2.0
+*/
+
 package chaincode
 
 import (
 	"context"
 	"crypto/tls"
+	"time"
+
 	cb "github.com/hyperledger/fabric-protos-go/common"
 	pb "github.com/hyperledger/fabric-protos-go/peer"
 	"github.com/hyperledger/fabric/bccsp"
@@ -12,7 +19,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"time"
 )
 
 type SimulateForkAttempt struct {

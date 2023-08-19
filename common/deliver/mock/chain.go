@@ -2,6 +2,7 @@
 package mock
 
 import (
+	"github.com/hyperledger/fabric-protos-go/common"
 	"sync"
 
 	"github.com/hyperledger/fabric/common/deliver"
@@ -52,6 +53,16 @@ type Chain struct {
 	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
+}
+
+func (fake *Chain) Forked() <-chan struct{} {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (fake *Chain) ForkedBlock() <-chan *common.Block {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (fake *Chain) Errored() <-chan struct{} {
